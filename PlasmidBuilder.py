@@ -145,23 +145,42 @@ def generate_plasmid(input_fa_path, design_txt_path, markers_tab_path="markers.t
     # 5. Assemble Sequence
     final_sequence = ""
     print("\n[Assembly Step-by-Step]:")
+    ori_added = False
+    missing_features = []
+
+    print("\n[Assembly Step-by-Step]:")
     
     for feature_type, feature_name in assembly_plan:
         
-        # A. Check if it is the ORI request
+        # Case A: User explicitly asks for ORI (e.g. "ori_pMB1")
+        # We check both the Type string and the Name string for "ori" or "replication"
         if "ori" in feature_type.lower() or "replication" in feature_name.lower():
-            # Use the ORI we found in Step 2
             final_sequence += identified_ori
-            print(f"  + Added Identified ORI ({feature_type})")
-            
-        # B. Check in loaded Database
+            ori_added = True
+            print(f"  + Added Identified ORI ({feature_name})")
+
+        # Case B: Feature is in our Database
         elif feature_name in db:
             seq_fragment = db[feature_name]
             final_sequence += seq_fragment
-            print(f"  + Added {feature_name} (Length: {len(seq_fragment)})")
-            
+            print(f"  + Added {feature_name} ({len(seq_fragment)} bp)")
+
+        # Case C: Feature NOT found
         else:
-            print(f"  ! Warning: '{feature_name}' not found in markers.tab. Skipping.")
+            print(f"  ❌ CRITICAL WARNING: '{feature_name}' requested but NOT found in markers.tab.")
+            missing_features.append(feature_name)
+            # We do NOT add anything here, but we log it.
+
+    # 3. Post-Assembly Checks
+    
+    # Check 1: Did we miss anything?
+    if missing_features:
+        print(f"\n[Alert] The following features were skipped (missing from DB): {missing_features}")
+    
+    # Check 2: Did the user forget the ORI? (Auto-Inclusion)
+    if not ori_added:
+        print("\n[Auto-Fix] No ORI specified in Design file. Appending identified ORI to ensure functionality.")
+        final_sequence += identified_ori
 
     # 6. Validation (The "Delete EcoRI" Requirement)
     # Even if we didn't add EcoRI intentionally, we check if it snuck in via ORI or Markers.
@@ -186,7 +205,7 @@ def generate_plasmid(input_fa_path, design_txt_path, markers_tab_path="markers.t
     print(f"\n--- Success! Plasmid saved to: {output_fa_path} ---")
     return output_fa_path
 
-def run_test_case(input_fa="pUC19.fa", design_txt="Design_pUC19.txt", markers_tab="markers.tab"):
+def run_test_case(input_fa="testfiles/pUC19.fa", design_txt="testfiles/Design_pUC19.txt", markers_tab="markers.tab"):
     """
     Runs the tool using existing input files and validates the output.
     Does NOT create/overwrite files, so it works with your uploaded data.
